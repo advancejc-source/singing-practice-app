@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <title>音感練習</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <section class="top-panel" id="top-panel">
+        <h1>音感練習</h1>
+        <div class="controls-row">
+          <div class="upload-block ref-user-block">
+            <label for="ref-audio">標準音檔</label>
+            <input id="ref-audio" type="file" accept=".mp3,.wav,.m4a,.ogg" />
+            <label class="ref-user-opt">延遲(秒)<input type="number" id="ref-delay" min="0" step="0.1" value="0" /></label>
+            <label class="ref-user-opt">音量<input type="range" id="ref-volume" min="0" max="100" value="100" /><span id="ref-volume-val">100</span>%</label>
+          </div>
+          <div class="upload-block ref-user-block">
+            <label for="user-audio">你的錄音檔</label>
+            <input id="user-audio" type="file" accept=".mp3,.wav,.m4a,.ogg" />
+            <label class="ref-user-opt">延遲(秒)<input type="number" id="user-delay" min="0" step="0.1" value="0" /></label>
+            <label class="ref-user-opt">音量<input type="range" id="user-volume" min="0" max="100" value="100" /><span id="user-volume-val">100</span>%</label>
+          </div>
+          <div class="bg-music-section">
+            <span class="controls-row-label">背景音樂</span>
+            <div class="bg-music-upload-grid">
+              <div class="bg-slot">
+                <label for="bg-music-1">1</label>
+                <input id="bg-music-1" type="file" accept=".mp3,.wav,.m4a,.ogg" />
+                <div class="bg-slot-name" id="bg-name-1">未選</div>
+                <label class="bg-slot-delay">延遲<input type="number" id="bg-delay-1" min="0" step="0.1" value="0" /></label>
+                <label class="bg-slot-volume">音<input type="range" id="bg-volume-1" min="0" max="100" value="100" /><span id="bg-volume-val-1">100</span>%</label>
+              </div>
+              <div class="bg-slot">
+                <label for="bg-music-2">2</label>
+                <input id="bg-music-2" type="file" accept=".mp3,.wav,.m4a,.ogg" />
+                <div class="bg-slot-name" id="bg-name-2">未選</div>
+                <label class="bg-slot-delay">延遲<input type="number" id="bg-delay-2" min="0" step="0.1" value="0" /></label>
+                <label class="bg-slot-volume">音<input type="range" id="bg-volume-2" min="0" max="100" value="100" /><span id="bg-volume-val-2">100</span>%</label>
+              </div>
+              <div class="bg-slot">
+                <label for="bg-music-3">3</label>
+                <input id="bg-music-3" type="file" accept=".mp3,.wav,.m4a,.ogg" />
+                <div class="bg-slot-name" id="bg-name-3">未選</div>
+                <label class="bg-slot-delay">延遲<input type="number" id="bg-delay-3" min="0" step="0.1" value="0" /></label>
+                <label class="bg-slot-volume">音<input type="range" id="bg-volume-3" min="0" max="100" value="100" /><span id="bg-volume-val-3">100</span>%</label>
+              </div>
+              <div class="bg-slot">
+                <label for="bg-music-4">4</label>
+                <input id="bg-music-4" type="file" accept=".mp3,.wav,.m4a,.ogg" />
+                <div class="bg-slot-name" id="bg-name-4">未選</div>
+                <label class="bg-slot-delay">延遲<input type="number" id="bg-delay-4" min="0" step="0.1" value="0" /></label>
+                <label class="bg-slot-volume">音<input type="range" id="bg-volume-4" min="0" max="100" value="100" /><span id="bg-volume-val-4">100</span>%</label>
+              </div>
+            </div>
+            <div class="bg-music-status" id="bg-music-status"></div>
+            <label class="bg-auto-play-label"><input type="checkbox" id="bg-auto-play" />自動播放</label>
+            <button id="bg-play-btn" type="button" disabled>播放背景音樂</button>
+          </div>
+          <div class="mic-section">
+            <button id="record-btn" type="button">麥克風錄音（10 分鐘）</button>
+            <div class="mic-status" id="record-status"></div>
+          </div>
+          <div class="analyze-wrap">
+            <button id="analyze-btn" type="button">開始比對並播放</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="resizer" id="resizer" title="拖曳調整上下比例"></div>
+
+      <main class="bottom-panel" id="bottom-panel">
+        <div class="pitch-graph-section" id="pitch-graph-wrap">
+          <canvas id="pitch-canvas"></canvas>
+          <div class="pitch-tooltip" id="pitch-tooltip" aria-hidden="true"></div>
+        </div>
+        <div class="timeline-row">
+          <span class="time-label" id="time-current">0:00</span>
+          <input type="range" id="timeline" min="0" max="100" value="0" step="0.1" />
+          <span class="time-label" id="time-total">0:00</span>
+        </div>
+        <div class="result-row">
+          <div class="accuracy-inline" id="accuracy-text">—</div>
+          <div class="segment-scores" id="segment-scores"></div>
+        </div>
+      </main>
+    </div>
+
+    <script src="./main.js"></script>
+  </body>
+</html>
