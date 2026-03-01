@@ -22,6 +22,10 @@
             <label class="ref-user-opt">延遲(秒)<input type="number" id="user-delay" min="0" step="0.1" value="0" /></label>
             <label class="ref-user-opt">音量<input type="range" id="user-volume" min="0" max="100" value="100" /><span id="user-volume-val">100</span>%</label>
           </div>
+          <div class="upload-block ref-user-block">
+            <label for="piano-master">鋼琴伴奏（Master）</label>
+            <input id="piano-master" type="file" accept=".mp3,.wav,.m4a,.ogg" />
+          </div>
           <div class="bg-music-section">
             <span class="controls-row-label">背景音樂</span>
             <div class="bg-music-upload-grid">
@@ -55,14 +59,9 @@
               </div>
             </div>
             <div class="bg-music-status" id="bg-music-status"></div>
-            <label class="bg-auto-play-label"><input type="checkbox" id="bg-auto-play" />自動播放</label>
             <button id="bg-play-btn" type="button" disabled>播放背景音樂</button>
           </div>
           <div class="mic-section">
-            <button id="record-btn" type="button">麥克風錄音（10 分鐘）</button>
-            <div class="mic-status" id="record-status"></div>
-          </div>
-          <div class="analyze-wrap">
             <button id="analyze-btn" type="button">開始比對並播放</button>
           </div>
         </div>
@@ -80,9 +79,59 @@
           <input type="range" id="timeline" min="0" max="100" value="0" step="0.1" />
           <span class="time-label" id="time-total">0:00</span>
         </div>
+        <div id="phrase-bar"></div>
+        <div class="abloop-row">
+          <div class="abloop-left">
+            <button id="ab-set-a" type="button">Set A</button>
+            <button id="ab-set-b" type="button">Set B</button>
+            <button id="ab-clear" type="button">Clear</button>
+            <span class="abloop-label">A=<span id="ab-a-label">--:--</span></span>
+            <span class="abloop-label">B=<span id="ab-b-label">--:--</span></span>
+          </div>
+          <div class="abloop-right">
+            <label class="abloop-toggle">
+              <input id="ab-enable" type="checkbox" />
+              <span>Enable Loop</span>
+            </label>
+            <label class="abloop-gap">
+              Gap
+              <input id="ab-gap" type="number" min="0" max="1.0" step="0.05" value="0.3" />
+              <span class="abloop-gap-unit">sec</span>
+            </label>
+          </div>
+        </div>
+        <div class="result-row pro-rec-row">
+          <button id="start-record-btn" type="button">開始錄音</button>
+          <button id="stop-record-btn" type="button" hidden>停止錄音</button>
+          <label class="record-mode-label">
+            錄音模式：
+            <select id="record-mode">
+              <option value="headphone">🎧 耳機模式（推薦）</option>
+              <option value="speaker">🔊 外放模式</option>
+            </select>
+          </label>
+          <label class="take-selector-label">
+            Take:
+            <select id="take-selector"></select>
+          </label>
+          <div id="pending-actions" class="pending-actions" hidden>
+            <button id="preview-play" type="button">▶ 預覽</button>
+            <button id="use-and-compare" type="button">✅ 使用並比對</button>
+            <button id="save-as" type="button">💾 另存新檔</button>
+            <button id="delete-pending" type="button">🗑 刪除</button>
+            <button id="start-new-take" type="button">➕ 新錄音</button>
+            <div id="pending-hint" class="pending-hint"></div>
+          </div>
+        </div>
+        <div id="device-warning" class="device-warning"></div>
         <div class="result-row">
           <div class="accuracy-inline" id="accuracy-text">—</div>
           <div class="segment-scores" id="segment-scores"></div>
+        </div>
+        <div class="result-row">
+          <button id="clear-current-settings" type="button">清除目前設定</button>
+          <button id="rmsAlignBtn" type="button">自動對齊（RMS）</button>
+          <span id="rmsAlignStatus"></span>
         </div>
       </main>
     </div>
