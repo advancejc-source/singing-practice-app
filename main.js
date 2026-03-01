@@ -89,6 +89,8 @@ const pitchTooltipEl = document.getElementById("pitch-tooltip");
 const rmsAlignBtn = document.getElementById("rmsAlignBtn");
 /** @type {HTMLSpanElement | null} */
 const rmsAlignStatusEl = document.getElementById("rmsAlignStatus");
+/** @type {HTMLButtonElement | null} */
+const replayBtn = document.getElementById("replay-btn");
 
 // 更換標準音 / 使用者音檔時，重置分析與播放狀態，避免繼續使用舊 buffer
 if (refInput) {
@@ -248,10 +250,22 @@ let recordedUserAudio = null;
  */
 let lastPlaybackData = null;
 
+/** @type {"v1" | "v2"} 比對模式，v2 時使用 v2PlaybackData */
+let compareMode = "v1";
+/** @type {{ refBuffer: AudioBuffer; accBuffer?: AudioBuffer; userBuffer: AudioBuffer; durationSec: number } | null} v2 比對完成後的播放資料 */
+let v2PlaybackData = null;
+
 /** @type {AudioBufferSourceNode | null} */
 let refSourceNode = null;
 /** @type {AudioBufferSourceNode | null} */
 let userSourceNode = null;
+/** 目前播放中的 ref/user/acc source，stopPlayback 與 reset 時會 stop 並清空 */
+/** @type {AudioBufferSourceNode | null} */
+let activeRefSource = null;
+/** @type {AudioBufferSourceNode | null} */
+let activeUserSource = null;
+/** @type {AudioBufferSourceNode | null} */
+let activeAccSource = null;
 /** @type {number} */
 let playbackAnimationId = 0;
 /** @type {boolean} */
@@ -1197,6 +1211,7 @@ async function usePendingRecordingAndCompare() {
   // 自動從 0 秒開始播放 ref + 伴奏 + 使用者錄音
   playbackOffsetSec = 0;
   startSyncedPlayback();
+  updateReplayButtonState();
 
   // 將此錄音存入 recordings，並更新 take selector
   const rec = {
@@ -1359,6 +1374,60 @@ let phraseDragStartEndSec = 0;
 let phraseDragTimelineWidth = 1;
 
 /**
+ * 清除所有現有設定（不刪檔）：停止播放、清比對資料、清圖。不呼叫 restorePlaybackSnapshot。
+ */
+function resetAllSessionState() {
+  console.log("RESET SESSION");
+
+  stopPlayback();
+  if (typeof stopPlaybackV2 === "function") stopPlaybackV2();
+
+  activeRefSource = null;
+  activeUserSource = null;
+  activeAccSource = null;
+
+  lastPlaybackData = null;
+  v2PlaybackData = null;
+  pendingRecording = null;
+  if (pendingActionsEl) pendingActionsEl.hidden = true;
+
+  if (pitchCanvas) {
+    const ctx = pitchCanvas.getContext("2d");
+    if (ctx) ctx.clearRect(0, 0, pitchCanvas.width, pitchCanvas.height);
+  }
+
+  if (typeof resetPlayhead === "function") resetPlayhead();
+
+  updateReplayButtonState();
+}
+
+/**
+ * 依是否有比對資料更新「重新播放」按鈕的 disabled 狀態
+ */
+function updateReplayButtonState() {
+  if (!replayBtn) return;
+  replayBtn.disabled = !(lastPlaybackData || v2PlaybackData);
+}
+
+/**
+ * 以目前 UI 的延遲設定重新播放：強制重建 source，讀取最新 delay。
+ */
+function replayWithCurrentSettings() {
+  console.log("REPLAY CLICKED");
+
+  stopPlayback();
+
+  if (lastPlaybackData) {
+    startSyncedPlayback({
+      refBuffer: lastPlaybackData.refBuffer,
+      userBuffer: lastPlaybackData.userBuffer,
+      accBuffer: masterPianoBuffer || undefined,
+      durationSec: lastPlaybackData.durationSec,
+    });
+  }
+}
+
+/**
  * 當更換 ref/user 音檔來源時，需清除舊的分析與播放狀態，避免繼續播放舊 AudioBuffer
  * - 停止目前播放
  * - 清空 lastPlaybackData / RMS offset / 視覺化
@@ -1366,6 +1435,7 @@ let phraseDragTimelineWidth = 1;
 function invalidateAnalysisState() {
   stopPlayback();
   lastPlaybackData = null;
+  v2PlaybackData = null;
   playbackOffsetSec = 0;
   if (typeof audioOffsetsSec !== "undefined") {
     audioOffsetsSec.ref = 0;
@@ -2797,6 +2867,7 @@ async function handleAnalyze() {
 
     // 7. 合併功能：比對完自動開始播放並顯示動畫（含背景音樂，由 startSyncedPlayback 一併啟動）
     startSyncedPlayback();
+    updateReplayButtonState();
   } catch (err) {
     console.error("分析時發生錯誤", err);
     const msg =
@@ -2831,7 +2902,6 @@ if (analyzeBtn) {
 function stopPlayback() {
   if (!isPlaying && !isBgPlaying) return;
 
-  // 將目前 Master Timeline 位置 T 寫回 playbackOffsetSec，作為下一次播放的起點
   if (lastPlaybackData) {
     const T = Math.max(0, audioContext.currentTime - masterStartTime);
     playbackOffsetSec = Math.min(T, lastPlaybackData.durationSec);
@@ -2840,18 +2910,24 @@ function stopPlayback() {
   isPlaying = false;
 
   if (refSourceNode) {
-    try {
-      refSourceNode.stop();
-      refSourceNode.disconnect();
-    } catch (_) {}
+    try { refSourceNode.stop(); refSourceNode.disconnect(); } catch (_) {}
     refSourceNode = null;
   }
   if (userSourceNode) {
-    try {
-      userSourceNode.stop();
-      userSourceNode.disconnect();
-    } catch (_) {}
+    try { userSourceNode.stop(); userSourceNode.disconnect(); } catch (_) {}
     userSourceNode = null;
+  }
+  if (activeRefSource) {
+    try { activeRefSource.stop(); activeRefSource.disconnect(); } catch (_) {}
+    activeRefSource = null;
+  }
+  if (activeUserSource) {
+    try { activeUserSource.stop(); activeUserSource.disconnect(); } catch (_) {}
+    activeUserSource = null;
+  }
+  if (activeAccSource) {
+    try { activeAccSource.stop(); activeAccSource.disconnect(); } catch (_) {}
+    activeAccSource = null;
   }
   if (refGainNode) {
     try { refGainNode.disconnect(); } catch (_) {}
@@ -2993,22 +3069,37 @@ function computeStartAtAndOutputTime(
 }
 
 /**
- * 標準音 / 你的錄音檔 / 背景音樂共用單一 Master Timeline：
- * finalOffsetSec = autoOffsetSec + manualOffsetSec
- * startAt / outputTime 依 Task1 邏輯計算
+ * 同步播放 ref / user / acc：delay 只影響 source.start 時間，不依賴舊 offset。
+ * @param {{ refBuffer: AudioBuffer; userBuffer: AudioBuffer; accBuffer?: AudioBuffer; durationSec: number } | undefined} [payload] 未傳則從 lastPlaybackData 建
  */
-function startSyncedPlayback() {
-  if (!lastPlaybackData || isPlaying) return;
+function startSyncedPlayback(payload) {
+  if (!payload && lastPlaybackData) {
+    payload = {
+      refBuffer: lastPlaybackData.refBuffer,
+      userBuffer: lastPlaybackData.userBuffer,
+      accBuffer: masterPianoBuffer || undefined,
+      durationSec: lastPlaybackData.durationSec,
+    };
+  }
+  if (!payload || !payload.refBuffer || !payload.userBuffer) return;
+  if (isPlaying) return;
+
+  stopPlayback();
 
   if (audioContext.state === "suspended") {
     audioContext.resume().catch(() => {});
   }
 
-  // manualOffsetSec：使用者在 UI 上填的延遲(秒)
-  const refManualOffsetSec =
-    refDelayInput && refDelayInput.value !== "" ? parseFloat(refDelayInput.value) || 0 : 0;
-  const userManualOffsetSec =
-    userDelayInput && userDelayInput.value !== "" ? parseFloat(userDelayInput.value) || 0 : 0;
+  const { refBuffer, userBuffer, accBuffer, durationSec } = payload;
+  const refDelay = parseFloat(refDelayInput?.value || 0) || 0;
+  const userDelay = parseFloat(userDelayInput?.value || 0) || 0;
+
+  console.log("PLAY WITH DELAY:", refDelay, userDelay);
+
+  masterStartTime = audioContext.currentTime + 0.05;
+  contentStartTime = masterStartTime;
+  playbackOffsetSec = 0;
+
   const refVol = refVolumeInput ? parseInt(refVolumeInput.value, 10) / 100 : 1;
   const userVol = userVolumeInput ? parseInt(userVolumeInput.value, 10) / 100 : 1;
 
@@ -3019,43 +3110,33 @@ function startSyncedPlayback() {
   userGainNode.gain.value = userVol;
   userGainNode.connect(audioContext.destination);
 
-  refSourceNode = audioContext.createBufferSource();
-  refSourceNode.buffer = lastPlaybackData.refBuffer;
-  refSourceNode.connect(refGainNode);
+  if (refBuffer) {
+    const refSource = audioContext.createBufferSource();
+    refSource.buffer = refBuffer;
+    refSource.connect(refGainNode);
+    refSource.start(masterStartTime + refDelay, 0, durationSec);
+    activeRefSource = refSource;
+  }
 
-  userSourceNode = audioContext.createBufferSource();
-  userSourceNode.buffer = lastPlaybackData.userBuffer;
-  userSourceNode.connect(userGainNode);
+  if (accBuffer) {
+    const accSource = audioContext.createBufferSource();
+    accSource.buffer = accBuffer;
+    accSource.connect(audioContext.destination);
+    accSource.start(masterStartTime, 0, durationSec);
+    activeAccSource = accSource;
+  }
 
-  // Master Timeline：播放瞬間的時間座標 = playbackOffsetSec
-  const now = audioContext.currentTime;
-  masterStartTime = now - playbackOffsetSec;
-  contentStartTime = masterStartTime;
-
-  const refAutoOffsetSec = lastPlaybackData.refOffsetSec ?? 0;
-  const userAutoOffsetSec = lastPlaybackData.userOffsetSec ?? 0;
-  const refFinalOffsetSec = refAutoOffsetSec + refManualOffsetSec;
-  const userFinalOffsetSec = userAutoOffsetSec + userManualOffsetSec;
-
-  const refTiming = computeStartAtAndOutputTime(
-    playbackOffsetSec,
-    refFinalOffsetSec,
-    lastPlaybackData.refBuffer.duration,
-    false
-  );
-  const userTiming = computeStartAtAndOutputTime(
-    playbackOffsetSec,
-    userFinalOffsetSec,
-    lastPlaybackData.userBuffer.duration,
-    false
-  );
-
-  refSourceNode.start(now + refTiming.outputDelaySec, refTiming.startAtSec);
-  userSourceNode.start(now + userTiming.outputDelaySec, userTiming.startAtSec);
+  if (userBuffer) {
+    const userSource = audioContext.createBufferSource();
+    userSource.buffer = userBuffer;
+    userSource.connect(userGainNode);
+    userSource.start(masterStartTime + userDelay, 0, durationSec);
+    activeUserSource = userSource;
+  }
 
   isPlaying = true;
   if (analyzeBtn) analyzeBtn.textContent = "停止播放";
-  if (bgBuffers.some(Boolean)) startBgMusic(playbackOffsetSec);
+  if (bgBuffers.some(Boolean)) startBgMusic(0);
   playbackAnimationId = requestAnimationFrame(animatePlayhead);
 }
 
@@ -4550,15 +4631,15 @@ if (startNewTakeBtn) {
 
 if (clearSettingsBtn) {
   clearSettingsBtn.addEventListener("click", () => {
-    if (isPlaying) {
-      stopPlayback();
-    }
-    if (typeof stopAccompanimentOnly === "function") {
-      stopAccompanimentOnly();
-    }
-    restorePlaybackSnapshot();
-    // 不清 pending，不清 recordings
+    resetAllSessionState();
   });
+}
+
+if (replayBtn) {
+  replayBtn.addEventListener("click", () => {
+    replayWithCurrentSettings();
+  });
+  updateReplayButtonState();
 }
 
 if (takeSelectorEl) {
